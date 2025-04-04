@@ -1,0 +1,33 @@
+{
+  "name": "Go Web Backend",
+  "image": "mcr.microsoft.com/devcontainers/go:1.24",
+  "features": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-azuretools.vscode-docker",
+        "ckolkman.vscode-postgres",
+        "ms-vscode.makefile-tools",
+        "humao.rest-client",
+        "redhat.vscode-yaml",
+      ],
+      "settings": {
+        "go.toolsManagement.autoUpdate": true,
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["--fast"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true
+        }
+      }
+    }
+  },
+  "forwardPorts": [8080, 5432],
+  "postCreateCommand": "apt-get update && apt-get install -y postgresql-client && go install github.com/cosmtrek/air@latest && go install github.com/go-delve/delve/cmd/dlv@latest && go install honnef.co/go/tools/cmd/staticcheck@latest && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
+  "postStartCommand": "docker compose up -d",
+  "containerEnv": {
+    "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+  }
+}
