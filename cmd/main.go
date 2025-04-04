@@ -1,3 +1,4 @@
+// cmd/main.go
 package main
 
 import (
@@ -16,6 +17,9 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 	"github.com/joho/godotenv"
+	
+	"github.com/dukerupert/doxie-discs/api/handlers"
+	"github.com/dukerupert/doxie-discs/middleware/auth"
 )
 
 func main() {
@@ -48,11 +52,12 @@ func main() {
 	}
 	log.Println("Successfully connected to database")
 
-	// Run migrations
-	if err := runMigrations(db); err != nil {
-		log.Fatalf("Migration failed: %v\n", err)
-	}
-	log.Println("Migrations completed successfully")
+	// Initialize handlers
+	recordHandler := handlers.NewRecordHandler(db)
+	userHandler := handlers.NewUserHandler(db)
+	artistHandler := handlers.NewArtistHandler(db)
+	genreHandler := handlers.NewGenreHandler(db)
+	labelHandler := handlers.NewLabelHandler(db)
 
 	// Initialize router with Chi
 	r := chi.NewRouter()
@@ -74,14 +79,75 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	// Routes
-	r.Route("/api", func(r chi.Router) {
-		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	// Public routes
+	r.Group(func(r chi.Router) {
+		r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK"))
 		})
 		
-		// TODO: Add more routes for your CRUD operations
+		// Authentication routes
+		r.Post("/api/auth/login", userHandler.Login)
+		r.Post("/api/auth/register", userHandler.Register)
+	})
+
+	// Protected routes (require authentication)
+	r.Group(func(r chi.Router) {
+		// Apply authentication middleware
+		r.Use(auth.Middleware)
+		
+		// Record routes
+		r.Route("/api/records", func(r chi.Router) {
+			r.Get("/", recordHandler.ListRecords)
+			r.Post("/", recordHandler.CreateRecord)
+			r.Get("/search", recordHandler.SearchRecords)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", recordHandler.GetRecord)
+				r.Put("/", recordHandler.UpdateRecord)
+				r.Delete("/", recordHandler.DeleteRecord)
+			})
+		})
+		
+		// Artist routes
+		r.Route("/api/artists", func(r chi.Router) {
+			r.Get("/", artistHandler.ListArtists)
+			r.Post("/", artistHandler.CreateArtist)
+			r.Get("/search", artistHandler.SearchArtists)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", artistHandler.GetArtist)
+				r.Put("/", artistHandler.UpdateArtist)
+				r.Delete("/", artistHandler.DeleteArtist)
+			})
+		})
+		
+		// Genre routes
+		r.Route("/api/genres", func(r chi.Router) {
+			r.Get("/", genreHandler.ListGenres)
+			r.Post("/", genreHandler.CreateGenre)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", genreHandler.GetGenre)
+				r.Put("/", genreHandler.UpdateGenre)
+				r.Delete("/", genreHandler.DeleteGenre)
+			})
+		})
+		
+		// Label routes
+		r.Route("/api/labels", func(r chi.Router) {
+			r.Get("/", labelHandler.ListLabels)
+			r.Post("/", labelHandler.CreateLabel)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", labelHandler.GetLabel)
+				r.Put("/", labelHandler.UpdateLabel)
+				r.Delete("/", labelHandler.DeleteLabel)
+			})
+		})
+		
+		// User routes (for profile, etc.)
+		r.Route("/api/users", func(r chi.Router) {
+			r.Get("/me", userHandler.GetProfile)
+			r.Put("/me", userHandler.UpdateProfile)
+			r.Put("/password", userHandler.UpdatePassword)
+		})
 	})
 
 	// Start server

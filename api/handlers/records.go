@@ -1,4 +1,3 @@
-// api/handlers/records.go
 package handlers
 
 import (
