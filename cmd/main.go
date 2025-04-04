@@ -1,4 +1,3 @@
-// main.go
 package main
 
 import (
@@ -28,11 +27,11 @@ func main() {
 
 	// Database connection string
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
+		os.Getenv("PG_USER"),
+		os.Getenv("PG_PASSWORD"),
+		os.Getenv("PG_HOST"),
+		os.Getenv("PG_PORT"),
+		os.Getenv("PG_DATABASE"),
 	)
 
 	// Connect to database
@@ -117,91 +116,3 @@ func runMigrations(db *sql.DB) error {
 
 	return nil
 }
-
-// db/models/user.go
-package models
-
-import (
-	"database/sql"
-	"time"
-)
-
-type User struct {
-	ID           int       `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"` // Don't expose in JSON
-	Name         string    `json:"name"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-// Simplified user service example
-type UserService struct {
-	DB *sql.DB
-}
-
-func NewUserService(db *sql.DB) *UserService {
-	return &UserService{DB: db}
-}
-
-func (s *UserService) GetByID(id int) (*User, error) {
-	user := &User{}
-	err := s.DB.QueryRow(
-		"SELECT id, email, password_hash, name, created_at, updated_at FROM users WHERE id = $1",
-		id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.CreatedAt, &user.UpdatedAt)
-	
-	if err != nil {
-		return nil, err
-	}
-	
-	return user, nil
-}
-
-// db/models/record.go
-package models
-
-import (
-	"database/sql"
-	"time"
-)
-
-type Record struct {
-	ID              int       `json:"id"`
-	Title           string    `json:"title"`
-	ReleaseYear     int       `json:"release_year,omitempty"`
-	CatalogNumber   string    `json:"catalog_number,omitempty"`
-	Condition       string    `json:"condition,omitempty"`
-	Notes           string    `json:"notes,omitempty"`
-	CoverImageURL   string    `json:"cover_image_url,omitempty"`
-	StorageLocation string    `json:"storage_location,omitempty"`
-	UserID          int       `json:"user_id"`
-	LabelID         int       `json:"label_id,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	
-	// Related entities
-	Artists []Artist `json:"artists,omitempty"`
-	Genres  []Genre  `json:"genres,omitempty"`
-	Tracks  []Track  `json:"tracks,omitempty"`
-}
-
-type RecordService struct {
-	DB *sql.DB
-}
-
-func NewRecordService(db *sql.DB) *RecordService {
-	return &RecordService{DB: db}
-}
-
-func (s *RecordService) GetByID(id int) (*Record, error) {
-	// Implementation details...
-	return nil, nil
-}
-
-func (s *RecordService) ListByUserID(userID int) ([]Record, error) {
-	// Implementation details...
-	return nil, nil
-}
-
-// Add more models (Artist, Label, Genre, Track) with similar structure
