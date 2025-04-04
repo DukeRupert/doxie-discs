@@ -1,0 +1,1 @@
+CREATE INDEX idx_artists_name ON artists(name);

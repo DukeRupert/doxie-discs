@@ -1,0 +1,11 @@
+CREATE TABLE tracks (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    duration INTERVAL,
+    position VARCHAR(10),
+    record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_tracks_title ON tracks(title);
