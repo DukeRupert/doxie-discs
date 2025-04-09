@@ -63,7 +63,7 @@ func (h *RecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 
 	records, err := h.RecordService.ListByUserID(userID)
 	if err != nil {
-		errorMsg := fmt.Sprintf("Error creating record: %v", err)
+		errorMsg := fmt.Sprintf("Error fetching records: %v", err)
 		log.Println(errorMsg)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return

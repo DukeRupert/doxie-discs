@@ -32,9 +32,19 @@ func (h *GenreHandler) GetGenre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GenreHandler) ListGenres(w http.ResponseWriter, r *http.Request) {
-	// Implementation
+	// Get user ID from context (set by auth middleware)
+	userID := r.Context().Value("userID").(int)
+	
+	genres, err := h.GenreService.ListByUserID(userID)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Error fetching genres: %v", err)
+		log.Println(errorMsg)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
+	json.NewEncoder(w).Encode(genres)
 }
 
 func (h *GenreHandler) CreateGenre(w http.ResponseWriter, r *http.Request) {
