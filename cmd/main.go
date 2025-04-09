@@ -4,7 +4,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -17,16 +16,85 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/dukerupert/doxie-discs/api/handlers"
 	"github.com/dukerupert/doxie-discs/middleware/auth"
 )
 
+// Define Prometheus metrics
+var (
+	httpRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "endpoint", "status"},
+	)
+
+	httpRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "endpoint"},
+	)
+)
+
+func init() {
+	// Register metrics with Prometheus
+	prometheus.MustRegister(httpRequestsTotal)
+	prometheus.MustRegister(httpRequestDuration)
+
+	// Configure zerolog
+	log.Logger = zerolog.New(os.Stdout).
+		With().
+		Timestamp().
+		Caller().
+		Logger().
+		Level(zerolog.InfoLevel)
+}
+
+// LoggerMiddleware creates a zerolog middleware for Chi
+func LoggerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Use Chi's middleware to capture response data
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+		// Process request
+		next.ServeHTTP(ww, r)
+
+		// Calculate duration
+		duration := time.Since(start)
+
+		// Record metrics
+		statusCode := ww.Status()
+		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path, http.StatusText(statusCode)).Inc()
+		httpRequestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration.Seconds())
+
+		// Log the request
+		log.Info().
+			Str("method", r.Method).
+			Str("url", r.URL.Path).
+			Int("status", statusCode).
+			Dur("duration", duration).
+			Int("size", ww.BytesWritten()).
+			Str("remote", r.RemoteAddr).
+			Msg("HTTP request")
+	})
+}
+
 func main() {
 	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("No .env file found, using environment variables")
+		log.Warn().Msg("No .env file found, using environment variables")
 	}
 
 	// Get database connection details from environment or use defaults
@@ -48,24 +116,24 @@ func main() {
 	// Connect to database
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		log.Fatal().Err(err).Msgf("Unable to connect to database: %v\n", err)
 	}
 
 	// Verify connection
 	err = db.Ping()
 	if err != nil {
-		log.Fatalf("Failed to ping database: %v\n", err)
+		log.Fatal().Err(err).Msgf("Failed to ping database: %v\n", err)
 	}
 
-	log.Println("Successfully connected to the database")
+	log.Info().Msg("Successfully connected to the database")
 
 	// Run database migrations
-	log.Println("Running database migrations...")
+	log.Info().Msg("Running database migrations...")
 	err = runMigrations(db)
 	if err != nil {
-		log.Fatalf("Migration failed: %v\n", err)
+		log.Fatal().Err(err).Msgf("Migration failed: %v\n", err)
 	}
-	log.Println("Migrations completed successfully")
+	log.Info().Msg("Migrations completed successfully")
 	defer db.Close()
 
 	// Initialize handlers
@@ -171,8 +239,12 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Server starting on port %s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	// Expose Prometheus metrics
+	r.Handle("/metrics", promhttp.Handler())
+
+	// Start server
+	log.Info().Msg("Starting server on :"+port)
+	http.ListenAndServe(":"+port, r)
 }
 
 // Helper function to get environment variable or return default value
