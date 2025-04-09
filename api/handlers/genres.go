@@ -4,11 +4,14 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/dukerupert/doxie-discs/db/models"
+	"github.com/go-chi/chi/v5"
 )
 
 type GenreHandler struct {
@@ -26,9 +29,35 @@ func NewGenreHandler(db *sql.DB) *GenreHandler {
 
 // Basic CRUD methods for GenreHandler
 func (h *GenreHandler) GetGenre(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err!= nil {
+		http.Error(w, "Invalid record ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get user ID from context (set by auth middleware)
+	userID := r.Context().Value("userID").(int)
+
+	genre, err := h.GenreService.GetByID(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Record not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	// Verify record belongs to user
+	if genre.UserID != userID {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Implementation
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(genre)
 }
 
 func (h *GenreHandler) ListGenres(w http.ResponseWriter, r *http.Request) {
