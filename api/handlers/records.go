@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"fmt"
+	"log"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/dukerupert/doxie-discs/db/models"
@@ -61,6 +63,8 @@ func (h *RecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 
 	records, err := h.RecordService.ListByUserID(userID)
 	if err != nil {
+		errorMsg := fmt.Sprintf("Error creating record: %v", err)
+		log.Println(errorMsg)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -85,6 +89,8 @@ func (h *RecordHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
 
 	createdRecord, err := h.RecordService.Create(&record)
 	if err != nil {
+		errorMsg := fmt.Sprintf("Error creating record: %v", err)
+		log.Println(errorMsg)
 		http.Error(w, "Error creating record", http.StatusInternalServerError)
 		return
 	}
