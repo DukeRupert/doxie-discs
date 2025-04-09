@@ -141,7 +141,7 @@ func (h *GenreHandler) UpdateGenre(w http.ResponseWriter, r *http.Request) {
 
 	updatedGenre, err := h.GenreService.Update(&genre)
 	if err != nil {
-		http.Error(w, "Error updating record", http.StatusInternalServerError)
+		http.Error(w, "Error updating genre", http.StatusInternalServerError)
 		return
 	}
 
@@ -152,6 +152,36 @@ func (h *GenreHandler) UpdateGenre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GenreHandler) DeleteGenre(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid genre ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get user ID from context (set by auth middleware)
+	userID := r.Context().Value("userID").(int)
+
+	// Check if record exists and belongs to user
+	genre, err := h.GenreService.GetByID(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Genre not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if genre.UserID != userID {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := h.GenreService.Delete(id, userID); err != nil {
+		http.Error(w, "Error deleting record", http.StatusInternalServerError)
+		return
+	}
+
 	// Implementation
 	w.WriteHeader(http.StatusNoContent)
 }
