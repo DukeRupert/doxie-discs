@@ -223,8 +223,8 @@ or
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
-    "password": "securePassword"
+    "email": "test@example.com",
+    "password": "password123"
   }' | jq -r '.token')
 
 echo "Your token is: $TOKEN"

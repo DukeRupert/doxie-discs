@@ -381,9 +381,49 @@ func (s *RecordService) loadLabel(record *Record) error {
 func (s *RecordService) Create(record *Record) (*Record, error) {
 	tx, err := s.DB.Begin()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
+	
+	// Check if the artists exist
+	if len(record.Artists) > 0 {
+		for _, artist := range record.Artists {
+			var exists bool
+			err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM artists WHERE id = $1)", artist.ID).Scan(&exists)
+			if err != nil {
+				return nil, fmt.Errorf("error checking if artist exists: %w", err)
+			}
+			if !exists {
+				return nil, fmt.Errorf("artist with ID %d does not exist", artist.ID)
+			}
+		}
+	}
+	
+	// Check if the genres exist
+	if len(record.Genres) > 0 {
+		for _, genre := range record.Genres {
+			var exists bool
+			err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM genres WHERE id = $1)", genre.ID).Scan(&exists)
+			if err != nil {
+				return nil, fmt.Errorf("error checking if genre exists: %w", err)
+			}
+			if !exists {
+				return nil, fmt.Errorf("genre with ID %d does not exist", genre.ID)
+			}
+		}
+	}
+	
+	// Check if label exists if label_id is provided
+	if record.LabelID != 0 {
+		var exists bool
+		err := tx.QueryRow("SELECT EXISTS(SELECT 1 FROM labels WHERE id = $1)", record.LabelID).Scan(&exists)
+		if err != nil {
+			return nil, fmt.Errorf("error checking if label exists: %w", err)
+		}
+		if !exists {
+			return nil, fmt.Errorf("label with ID %d does not exist", record.LabelID)
+		}
+	}
 	
 	query := `
 		INSERT INTO records (
@@ -418,45 +458,56 @@ func (s *RecordService) Create(record *Record) (*Record, error) {
 	)
 	
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to insert record: %w", err)
 	}
 	
 	// Add artists if provided
 	if len(record.Artists) > 0 {
+		artistStmt, err := tx.Prepare(
+			"INSERT INTO artist_record (artist_id, record_id, role) VALUES ($1, $2, $3)")
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare artist statement: %w", err)
+		}
+		defer artistStmt.Close()
+		
 		for _, artist := range record.Artists {
-			_, err = tx.Exec(
-				"INSERT INTO artist_record (artist_id, record_id, role) VALUES ($1, $2, $3)",
-				artist.ID,
-				record.ID,
-				artist.Role,
-			)
+			_, err = artistStmt.Exec(artist.ID, record.ID, artist.Role)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to insert artist association: %w", err)
 			}
 		}
 	}
 	
 	// Add genres if provided
 	if len(record.Genres) > 0 {
+		genreStmt, err := tx.Prepare(
+			"INSERT INTO genre_record (genre_id, record_id) VALUES ($1, $2)")
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare genre statement: %w", err)
+		}
+		defer genreStmt.Close()
+		
 		for _, genre := range record.Genres {
-			_, err = tx.Exec(
-				"INSERT INTO genre_record (genre_id, record_id) VALUES ($1, $2)",
-				genre.ID,
-				record.ID,
-			)
+			_, err = genreStmt.Exec(genre.ID, record.ID)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to insert genre association: %w", err)
 			}
 		}
 	}
 	
 	// Add tracks if provided
 	if len(record.Tracks) > 0 {
+		trackStmt, err := tx.Prepare(
+			`INSERT INTO tracks (title, duration, position, record_id) 
+			 VALUES ($1, $2, $3, $4) RETURNING id`)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare track statement: %w", err)
+		}
+		defer trackStmt.Close()
+		
 		for i := range record.Tracks {
 			var trackID int
-			err = tx.QueryRow(
-				`INSERT INTO tracks (title, duration, position, record_id) 
-				 VALUES ($1, $2, $3, $4) RETURNING id`,
+			err = trackStmt.QueryRow(
 				record.Tracks[i].Title,
 				record.Tracks[i].Duration,
 				record.Tracks[i].Position,
@@ -464,14 +515,14 @@ func (s *RecordService) Create(record *Record) (*Record, error) {
 			).Scan(&trackID)
 			
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to insert track: %w", err)
 			}
 			record.Tracks[i].ID = trackID
 		}
 	}
 	
 	if err = tx.Commit(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	
 	return record, nil

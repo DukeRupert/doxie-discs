@@ -2,6 +2,8 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -35,10 +37,31 @@ func (h *ArtistHandler) ListArtists(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
 }
 
+// CreateArtist adds a new artist to the database
 func (h *ArtistHandler) CreateArtist(w http.ResponseWriter, r *http.Request) {
-	// Implementation
+	// Get user ID from context (set by auth middleware)
+	userID := r.Context().Value("userID").(int)
+
+	var artist models.Artist
+	if err := json.NewDecoder(r.Body).Decode(&artist); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Set user ID from authenticated user
+	artist.UserID = userID
+
+	createdArtist, err := h.ArtistService.Create(&artist)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Error creating artist: %v", err)
+		log.Println(errorMsg)
+		http.Error(w, "Error creating artist", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
+	json.NewEncoder(w).Encode(createdArtist)
 }
 
 func (h *ArtistHandler) UpdateArtist(w http.ResponseWriter, r *http.Request) {
