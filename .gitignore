@@ -1,15 +1,38 @@
-# Godot 4+ specific ignores
-.godot/
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# Godot-specific ignores
-.import/
-export.cfg
-export_credentials.cfg
+# Test binary, built with `go test -c`
+*.test
 
-# Imported translations (automatically generated from CSV files)
-*.translation
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
 
-# Mono-specific ignores
-.mono/
-data_*/
-mono_crash.*.json
+# Go workspace file
+go.work
+
+# Environment variables
+.env
+.env.local
+
+# Build directory
+/bin/
+/dist/
+
+# Dependency directories (remove these if you're not using modules)
+/vendor/
+
+# Air temporary files
+/tmp/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# PostgreSQL data directory
+.postgres-data/

@@ -15,9 +15,9 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
 	"github.com/joho/godotenv"
-	
+	_ "github.com/lib/pq"
+
 	"github.com/dukerupert/doxie-discs/api/handlers"
 	"github.com/dukerupert/doxie-discs/middleware/auth"
 )
@@ -29,13 +29,20 @@ func main() {
 		log.Println("No .env file found, using environment variables")
 	}
 
+	// Get database connection details from environment or use defaults
+	dbUser := getEnvOrDefault("POSTGRES_USER", "postgres")
+	dbPassword := getEnvOrDefault("POSTGRES_PASSWORD", "postgres")
+	dbHost := getEnvOrDefault("POSTGRES_HOST", "localhost") // Uses 'localhost' since we're using network_mode: service:db
+	dbPort := getEnvOrDefault("POSTGRES_PORT", "5432")
+	dbName := getEnvOrDefault("POSTGRES_DB", "dev")
+
 	// Database connection string
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("PG_USER"),
-		os.Getenv("PG_PASSWORD"),
-		os.Getenv("PG_HOST"),
-		os.Getenv("PG_PORT"),
-		os.Getenv("PG_DATABASE"),
+		dbUser,
+		dbPassword,
+		dbHost,
+		dbPort,
+		dbName,
 	)
 
 	// Connect to database
@@ -43,14 +50,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
-	defer db.Close()
 
-	// Test the connection
+	// Verify connection
 	err = db.Ping()
 	if err != nil {
-		log.Fatalf("Unable to ping database: %v\n", err)
+		log.Fatalf("Failed to ping database: %v\n", err)
 	}
-	log.Println("Successfully connected to database")
+
+	log.Println("Successfully connected to the database")
+
+	// Run database migrations
+	log.Println("Running database migrations...")
+	err = runMigrations(db)
+	if err != nil {
+		log.Fatalf("Migration failed: %v\n", err)
+	}
+	log.Println("Migrations completed successfully")
+	defer db.Close()
 
 	// Initialize handlers
 	recordHandler := handlers.NewRecordHandler(db)
@@ -68,7 +84,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
-	
+
 	// Configure CORS
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"}, // Adjust this for production
@@ -85,7 +101,7 @@ func main() {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK"))
 		})
-		
+
 		// Authentication routes
 		r.Post("/api/auth/login", userHandler.Login)
 		r.Post("/api/auth/register", userHandler.Register)
@@ -95,7 +111,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		// Apply authentication middleware
 		r.Use(auth.Middleware)
-		
+
 		// Record routes
 		r.Route("/api/records", func(r chi.Router) {
 			r.Get("/", recordHandler.ListRecords)
@@ -107,7 +123,7 @@ func main() {
 				r.Delete("/", recordHandler.DeleteRecord)
 			})
 		})
-		
+
 		// Artist routes
 		r.Route("/api/artists", func(r chi.Router) {
 			r.Get("/", artistHandler.ListArtists)
@@ -119,7 +135,7 @@ func main() {
 				r.Delete("/", artistHandler.DeleteArtist)
 			})
 		})
-		
+
 		// Genre routes
 		r.Route("/api/genres", func(r chi.Router) {
 			r.Get("/", genreHandler.ListGenres)
@@ -130,7 +146,7 @@ func main() {
 				r.Delete("/", genreHandler.DeleteGenre)
 			})
 		})
-		
+
 		// Label routes
 		r.Route("/api/labels", func(r chi.Router) {
 			r.Get("/", labelHandler.ListLabels)
@@ -141,7 +157,7 @@ func main() {
 				r.Delete("/", labelHandler.DeleteLabel)
 			})
 		})
-		
+
 		// User routes (for profile, etc.)
 		r.Route("/api/users", func(r chi.Router) {
 			r.Get("/me", userHandler.GetProfile)
@@ -159,6 +175,15 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
 
+// Helper function to get environment variable or return default value
+func getEnvOrDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
 func runMigrations(db *sql.DB) error {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
@@ -167,7 +192,7 @@ func runMigrations(db *sql.DB) error {
 
 	// Path to migration files
 	migrationsPath := "file://db/migrations"
-	
+
 	m, err := migrate.NewWithDatabaseInstance(
 		migrationsPath,
 		"postgres", driver)

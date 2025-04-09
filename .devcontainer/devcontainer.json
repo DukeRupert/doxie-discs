@@ -1,29 +1,44 @@
 {
-  "name": "Go Backend",
-  "image": "mcr.microsoft.com/devcontainers/go:1.22-bullseye",
+  "name": "Go & PostgreSQL Development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  
+  // Features to add to the development container
   "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
-            "compose": true
-        }
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {}
   },
-  "runArgs": ["--env-file", ".env"],
-  "forwardPorts": [8080, 5432],
-  "postCreateCommand": "apt-get update && apt-get install -y postgresql postgresql-contrib && service postgresql start",
+  
+  // Configure tool-specific properties
   "customizations": {
     "vscode": {
       "extensions": [
         "golang.go",
         "cweijan.vscode-postgresql-client2",
         "ms-azuretools.vscode-docker",
-        "esbenp.prettier-vscode"
+        "github.copilot"
       ],
       "settings": {
         "go.toolsManagement.checkForUpdates": "local",
         "go.useLanguageServer": true,
-        "go.gopath": "/go"
+        "go.gopath": "/go",
+        "go.lintOnSave": "package",
+        "go.formatTool": "goimports",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true
+        }
       }
     }
   },
-  "remoteUser": "vscode",
-  "postStartCommand": "service postgresql start && sudo -u postgres psql -c \"ALTER USER postgres PASSWORD 'postgres';\" && sudo -u postgres psql -c \"CREATE DATABASE golang_app;\""
+  
+  // Use 'forwardPorts' to make a list of ports inside the container available locally
+  "forwardPorts": [8080, 5432],
+  
+  // Use 'postCreateCommand' to run commands after the container is created
+  "postCreateCommand": "go mod download && go mod verify",
+  
+  // Comment out to connect as root
+  "remoteUser": "vscode"
 }
