@@ -41,7 +41,7 @@ func (h *GenreHandler) GetGenre(w http.ResponseWriter, r *http.Request) {
 	genre, err := h.GenreService.GetByID(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "Record not found", http.StatusNotFound)
+			http.Error(w, "Genre not found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -103,9 +103,52 @@ func (h *GenreHandler) CreateGenre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GenreHandler) UpdateGenre(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid record ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get user ID from context (set by auth middleware)
+	userID := r.Context().Value("userID").(int)
+
+	// Check if record exists and belongs to user
+	existingGenre, err := h.GenreService.GetByID(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "Genre not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if existingGenre.UserID != userID {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Decode request body
+	var genre models.Genre
+	if err := json.NewDecoder(r.Body).Decode(&genre); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Set ID and user ID
+	genre.ID = id
+	genre.UserID = userID
+
+	updatedGenre, err := h.GenreService.Update(&genre)
+	if err != nil {
+		http.Error(w, "Error updating record", http.StatusInternalServerError)
+		return
+	}
+
 	// Implementation
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "not implemented"})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedGenre)
 }
 
 func (h *GenreHandler) DeleteGenre(w http.ResponseWriter, r *http.Request) {
