@@ -59,8 +59,6 @@ func (h *GenreHandler) GetGenre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Implementation
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(genre)
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Successfully retrieved genre")
@@ -79,7 +77,6 @@ func (h *GenreHandler) ListGenres(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(genres)
 	log.Debug().Int("userID", userID).Int("count", len(genres)).Msg("Successfully listed genres")
 }
@@ -165,8 +162,8 @@ func (h *GenreHandler) UpdateGenre(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Implementation
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(updatedGenre)
 	log.Info().Int("id", id).Int("userID", userID).Str("name", updatedGenre.Name).Msg("Genre updated successfully")
 }
