@@ -63,8 +63,20 @@ func (h *RecordHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 
 // ListRecords gets all records for the user
 func (h *RecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+
+	// Get user ID from context as a string
+	userIDStr, ok := r.Context().Value("userID").(string)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Convert to integer if needed
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		return
+	}
 
 	log.Debug().Int("userID", userID).Msg("Listing records for user")
 

@@ -6,15 +6,24 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"time"
+	"strings"
+	"strconv"
 
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/dukerupert/doxie-discs/db/models"
 	"github.com/dukerupert/doxie-discs/middleware/auth"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/rs/zerolog/log"
+
 )
 
 type UserHandler struct {
 	DB         *sql.DB
 	UserService *models.UserService
+	TokenAuth   *jwtauth.JWTAuth
 }
 
 type LoginRequest struct {
@@ -44,10 +53,11 @@ type AuthResponse struct {
 }
 
 // NewUserHandler creates a new UserHandler with the given DB connection
-func NewUserHandler(db *sql.DB) *UserHandler {
+func NewUserHandler(db *sql.DB, tokenAuth *jwtauth.JWTAuth) *UserHandler {
 	return &UserHandler{
 		DB:         db,
 		UserService: models.NewUserService(db),
+		TokenAuth:   tokenAuth,
 	}
 }
 
@@ -114,25 +124,45 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 // Login authenticates a user and returns a JWT token
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+	// Create a logger with request context
+	// Create a logger with request context
+    logger := log.With().
+        Str("request_id", middleware.GetReqID(r.Context())).
+        Str("handler", "UserHandler.Login").
+        Logger()
 
+    var req LoginRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        logger.Warn().Err(err).Msg("Invalid request body")
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
 	// Validate request
 	if req.Email == "" || req.Password == "" {
+		logger.Warn().
+			Str("email", req.Email).
+			Bool("password_empty", req.Password == "").
+			Msg("Missing required fields")
 		http.Error(w, "Email and password are required", http.StatusBadRequest)
 		return
 	}
+
+	logger.Debug().Str("email", req.Email).Msg("Attempting login")
 
 	// Get user by email
 	user, err := h.UserService.GetByEmail(req.Email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			logger.Warn().
+				Str("email", req.Email).
+				Msg("User not found")
 			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 			return
 		}
+		logger.Error().
+			Err(err).
+			Str("email", req.Email).
+			Msg("Database error when retrieving user")
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -140,29 +170,87 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Check password
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password))
 	if err != nil {
+		logger.Warn().
+			Str("email", req.Email).
+			Int("user_id", user.ID).
+			Msg("Invalid password")
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
-	// Generate JWT token
-	token, err := auth.GenerateToken(user.ID)
-	if err != nil {
-		http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
-		return
-	}
+	// Generate JWT token using go-chi/jwtauth
+    claims := map[string]interface{}{
+        "user_id": user.ID,
+        "email":   user.Email,
+        "exp":     time.Now().Add(24 * time.Hour).Unix(),
+    }
+    
+    _, tokenString, err := h.TokenAuth.Encode(claims)
+    if err != nil {
+        logger.Error().
+            Err(err).
+            Int("user_id", user.ID).
+            Msg("Failed to generate JWT token")
+        http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
+        return
+    }
 
-	// Return user and token
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  *user,
-	})
+    // Set the JWT token as a cookie
+    http.SetCookie(w, &http.Cookie{
+        Name:     "jwt",
+        Value:    tokenString,
+        Path:     "/",
+        HttpOnly: true,
+        Secure:   r.TLS != nil, // Set to true if using HTTPS
+        MaxAge:   int(24 * time.Hour.Seconds()),
+        SameSite: http.SameSiteLaxMode,
+    })
+
+    logger.Info().
+        Int("user_id", user.ID).
+        Str("email", user.Email).
+        Msg("User authenticated successfully")
+
+    // Check if this is an API request or a form submission
+    if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		// For API clients, return JSON response with token
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(AuthResponse{
+			Token: tokenString,
+			User:  *user,
+		})
+	} else {
+		// For browser clients, set the token in a cookie and redirect
+		http.SetCookie(w, &http.Cookie{
+			Name:     "jwt",
+			Value:    tokenString,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil, // Set to true if using HTTPS
+			MaxAge:   int(24 * time.Hour.Seconds()),
+			SameSite: http.SameSiteLaxMode,
+		})
+		
+		// Redirect to dashboard with token in URL (will be removed by JS)
+		http.Redirect(w, r, "/dashboard?token="+url.QueryEscape(tokenString), http.StatusSeeOther)
+	}
 }
 
 // GetProfile returns the current user's profile
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	 // Get user ID from context as a string
+	 userIDStr, ok := r.Context().Value("userID").(string)
+	 if !ok {
+		 http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		 return
+	 }
+ 
+	 // Convert to integer if needed
+	 userID, err := strconv.Atoi(userIDStr)
+	 if err != nil {
+		 http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		 return
+	 }
 
 	// Get user from database
 	user, err := h.UserService.GetByID(userID)

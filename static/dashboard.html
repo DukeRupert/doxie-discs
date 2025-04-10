@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vinyl Collection Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        header {
+            background-color: #333;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+        }
+
+        .user-menu span {
+            margin-right: 1rem;
+        }
+
+        .logout-btn {
+            background-color: transparent;
+            border: 1px solid white;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .logout-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            margin: 0;
+            color: #333;
+        }
+
+        .add-record-btn {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .add-record-btn:hover {
+            background-color: #3a80d2;
+        }
+
+        .add-record-btn svg {
+            margin-right: 0.5rem;
+        }
+
+        .search-filter-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #777;
+        }
+
+        .filters {
+            display: flex;
+            gap: 1rem;
+        }
+
+        select {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-width: 150px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .records-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .record-card {
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .record-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .record-image {
+            height: 220px;
+            background-color: #eee;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .record-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .record-placeholder {
+            width: 120px;
+            height: 120px;
+            background-color: #ddd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .record-info {
+            padding: 1rem;
+        }
+
+        .record-title {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .record-artist {
+            color: #555;
+            margin-bottom: 0.5rem;
+        }
+
+        .record-details {
+            display: flex;
+            justify-content: space-between;
+            color: #777;
+            font-size: 0.9rem;
+        }
+
+        .record-year,
+        .record-genre {
+            display: flex;
+            align-items: center;
+        }
+
+        .record-year svg,
+        .record-genre svg {
+            margin-right: 0.25rem;
+        }
+
+        .record-location {
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid #eee;
+            color: #777;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .record-location svg {
+            margin-right: 0.25rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #777;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .submit-btn {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .submit-btn:hover {
+            background-color: #3a80d2;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .empty-state h2 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            margin-bottom: 2rem;
+            color: #777;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #777;
+        }
+
+        @media (max-width: 768px) {
+            .search-filter-container {
+                flex-direction: column;
+            }
+
+            .search-box {
+                min-width: 100%;
+            }
+
+            .filters {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            select {
+                min-width: 48%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="logo">Vinyl Tracker</div>
+        <div class="user-menu">
+            <span id="username">User</span>
+            <button class="logout-btn" id="logout-btn">Logout</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="dashboard-header">
+            <h1>Your Vinyl Collection</h1>
+            <button class="add-record-btn" id="add-record-btn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 3.33334V12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <path d="M3.33337 8H12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                </svg>
+                Add Record
+            </button>
+        </div>
+
+        <div class="search-filter-container">
+            <div class="search-box">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path
+                        d="M7.33333 12.6667C10.2789 12.6667 12.6667 10.2789 12.6667 7.33333C12.6667 4.38781 10.2789 2 7.33333 2C4.38781 2 2 4.38781 2 7.33333C2 10.2789 4.38781 12.6667 7.33333 12.6667Z"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M14 14L11 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                </svg>
+                <input type="text" id="search-input" placeholder="Search records, artists, or genres">
+            </div>
+
+            <div class="filters">
+                <select id="artist-filter">
+                    <option value="">All Artists</option>
+                    <!-- Artist options will be populated by JS -->
+                </select>
+
+                <select id="genre-filter">
+                    <option value="">All Genres</option>
+                    <!-- Genre options will be populated by JS -->
+                </select>
+            </div>
+        </div>
+
+        <div id="records-container" class="records-grid">
+            <!-- Records will be populated here by JS -->
+            <div class="loading">Loading your collection...</div>
+        </div>
+    </div>
+
+    <!-- Add Record Modal -->
+    <div class="modal" id="add-record-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Add New Record</h2>
+                <button class="close-modal" id="close-modal">&times;</button>
+            </div>
+
+            <form id="add-record-form">
+                <div class="form-group">
+                    <label for="title">Album Title</label>
+                    <input type="text" id="title" name="title" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="artist">Artist</label>
+                        <input type="text" id="artist" name="artist" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="year">Release Year</label>
+                        <input type="number" id="year" name="year" min="1900" max="2099">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="genre">Genre</label>
+                        <input type="text" id="genre" name="genre">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="label">Record Label</label>
+                        <input type="text" id="label" name="label">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="location">Storage Location</label>
+                    <input type="text" id="location" name="location" placeholder="e.g., Shelf A, Bin 3">
+                </div>
+
+                <div class="form-group">
+                    <label for="notes">Notes</label>
+                    <textarea id="notes" name="notes" rows="3"
+                        placeholder="Add any additional notes about this record"></textarea>
+                </div>
+
+                <button type="submit" class="submit-btn">Add Record</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check if token is in URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+
+            if (token) {
+                // Store token in localStorage
+                localStorage.setItem('jwtToken', token);
+
+                // Remove token from URL (for security)
+                const cleanUrl = window.location.pathname;
+                history.replaceState({}, document.title, cleanUrl);
+            } else {
+                // Check if token exists in localStorage
+                const storedToken = localStorage.getItem('jwtToken');
+                if (!storedToken) {
+                    // No token found, redirect to login
+                    window.location.href = '/login';
+                }
+            }
+
+            // Set up event listeners
+            const addRecordBtn = document.getElementById('add-record-btn');
+            const closeModalBtn = document.getElementById('close-modal');
+            const modal = document.getElementById('add-record-modal');
+            const logoutBtn = document.getElementById('logout-btn');
+            const searchInput = document.getElementById('search-input');
+            const artistFilter = document.getElementById('artist-filter');
+            const genreFilter = document.getElementById('genre-filter');
+            const addRecordForm = document.getElementById('add-record-form');
+
+            // Fetch and display user profile
+            fetchUserProfile();
+
+            // Fetch and display records
+            fetchRecords();
+
+            // Event: Open add record modal
+            addRecordBtn.addEventListener('click', function () {
+                modal.style.display = 'flex';
+            });
+
+            // Event: Close modal
+            closeModalBtn.addEventListener('click', function () {
+                modal.style.display = 'none';
+            });
+
+            // Event: Click outside modal to close
+            window.addEventListener('click', function (event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+
+            // Event: Logout
+            logoutBtn.addEventListener('click', function () {
+                localStorage.removeItem('authToken');
+                window.location.href = '/login';
+            });
+
+            // Event: Search records
+            searchInput.addEventListener('input', function () {
+                filterRecords();
+            });
+
+            // Event: Filter by artist
+            artistFilter.addEventListener('change', function () {
+                filterRecords();
+            });
+
+            // Event: Filter by genre
+            genreFilter.addEventListener('change', function () {
+                filterRecords();
+            });
+
+            // Event: Submit add record form
+            addRecordForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                addRecord();
+            });
+
+            // Function: Fetch user profile
+            function fetchUserProfile() {
+                fetch('/api/users/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch user profile');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        document.getElementById('username').textContent = data.name || data.email;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching user profile:', error);
+                    });
+            }
+
+            // Function: Fetch records
+            function fetchRecords() {
+                const recordsContainer = document.getElementById('records-container');
+
+                fetch('/api/records', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch records');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Remove loading indicator
+                        recordsContainer.innerHTML = '';
+
+                        if (data.length === 0) {
+                            showEmptyState();
+                            return;
+                        }
+
+                        // Populate records
+                        data.forEach(record => {
+                            recordsContainer.appendChild(createRecordCard(record));
+                        });
+
+                        // Populate filter dropdowns
+                        populateFilters(data);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching records:', error);
+                        recordsContainer.innerHTML = `
+                        <div class="empty-state">
+                            <h2>Error loading records</h2>
+                            <p>${error.message}</p>
+                        </div>
+                    `;
+                    });
+            }
+
+            // Function: Create record card
+            function createRecordCard(record) {
+                const card = document.createElement('div');
+                card.className = 'record-card';
+                card.setAttribute('data-id', record.id);
+                card.setAttribute('data-artist', record.artist.name.toLowerCase());
+                card.setAttribute('data-genre', record.genre ? record.genre.name.toLowerCase() : '');
+                card.setAttribute('data-title', record.title.toLowerCase());
+
+                card.innerHTML = `
+                    <div class="record-image">
+                        ${record.cover_url ?
+                        `<img src="${record.cover_url}" alt="${record.title}">` :
+                        `<div class="record-placeholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="10" stroke="#888" stroke-width="1.5"/>
+                                    <circle cx="12" cy="12" r="2" stroke="#888" stroke-width="1.5"/>
+                                </svg>
+                            </div>`
+                    }
+                    </div>
+                    <div class="record-info">
+                        <div class="record-title">${record.title}</div>
+                        <div class="record-artist">${record.artist.name}</div>
+                        <div class="record-details">
+                            <div class="record-year">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M3 10H21" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M8 2V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                    <path d="M16 2V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                                ${record.year || 'Unknown'}
+                            </div>
+                            <div class="record-genre">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M9 14L4 9L9 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M20 20V13C20 10.7909 18.2091 9 16 9H4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                ${record.genre ? record.genre.name : 'Uncategorized'}
+                            </div>
+                        </div>
+                        ${record.location ? `
+                            <div class="record-location">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 13C13.6569 13 15 11.6569 15 10C15 8.34315 13.6569 7 12 7C10.3431 7 9 8.34315 9 10C9 11.6569 10.3431 13 12 13Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M12 21C16 17 20 13.4183 20 10C20 5.58172 16.4183 2 12 2C7.58172 2 4 5.58172 4 10C4 13.4183 8 17 12 21Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                ${record.location}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                return card;
+            }
+
+            // Function: Show empty state
+            function showEmptyState() {
+                const recordsContainer = document.getElementById('records-container');
+                recordsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" stroke="#888" stroke-width="1.5"/>
+                            <circle cx="12" cy="12" r="3" stroke="#888" stroke-width="1.5"/>
+                            <circle cx="12" cy="12" r="1" fill="#888"/>
+                        </svg>
+                        <h2>Your collection is empty</h2>
+                        <p>Add your first vinyl record to get started</p>
+                        <button class="add-record-btn" onclick="document.getElementById('add-record-btn').click()">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8 3.33334V12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                <path d="M3.33337 8H12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            Add Record
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Function: Populate filter dropdowns
+            function populateFilters(records) {
+                const artists = new Set();
+                const genres = new Set();
+
+                records.forEach(record => {
+                    artists.add(record.artist.name);
+                    if (record.genre) {
+                        genres.add(record.genre.name);
+                    }
+                });
+
+                // Populate artist filter
+                const artistOptions = Array.from(artists).sort();
+                artistOptions.forEach(artist => {
+                    const option = document.createElement('option');
+                    option.value = artist.toLowerCase();
+                    option.textContent = artist;
+                    artistFilter.appendChild(option);
+                });
+
+                // Populate genre filter
+                const genreOptions = Array.from(genres).sort();
+                genreOptions.forEach(genre => {
+                    const option = document.createElement('option');
+                    option.value = genre.toLowerCase();
+                    option.textContent = genre;
+                    genreFilter.appendChild(option);
+                });
+            }
+
+            // Function: Filter records
+            function filterRecords() {
+                const searchTerm = searchInput.value.toLowerCase();
+                const selectedArtist = artistFilter.value.toLowerCase();
+                const selectedGenre = genreFilter.value.toLowerCase();
+
+                const recordCards = document.querySelectorAll('.record-card');
+
+                recordCards.forEach(card => {
+                    const artist = card.getAttribute('data-artist');
+                    const genre = card.getAttribute('data-genre');
+                    const title = card.getAttribute('data-title');
+
+                    // Check if the card matches all active filters
+                    const matchesSearch = !searchTerm ||
+                        title.includes(searchTerm) ||
+                        artist.includes(searchTerm) ||
+                        genre.includes(searchTerm);
+
+                    const matchesArtist = !selectedArtist || artist === selectedArtist;
+                    const matchesGenre = !selectedGenre || genre === selectedGenre;
+
+                    if (matchesSearch && matchesArtist && matchesGenre) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+
+            // Function: Add record
+            function addRecord() {
+                const formData = new FormData(addRecordForm);
+                const recordData = {
+                    title: formData.get('title'),
+                    artist: formData.get('artist'),
+                    year: formData.get('year') ? parseInt(formData.get('year')) : null,
+                    genre: formData.get('genre') || null,
+                    label: formData.get('label') || null,
+                    location: formData.get('location') || null,
+                    notes: formData.get('notes') || null
+                };
+
+                fetch('/api/records', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(recordData)
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to add record');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Close modal and reset form
+                        modal.style.display = 'none';
+                        addRecordForm.reset();
+
+                        // Refresh records
+                        fetchRecords();
+                    })
+                    .catch(error => {
+                        console.error('Error adding record:', error);
+                        alert('Failed to add record: ' + error.message);
+                    });
+            }
+        });
+    </script>
+</body>
+
+</html>

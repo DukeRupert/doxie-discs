@@ -1,16 +1,19 @@
-// cmd/main.go
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -22,8 +25,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/dukerupert/doxie-discs/api/handlers"
-	"github.com/dukerupert/doxie-discs/middleware/auth"
 )
+var tokenAuth *jwtauth.JWTAuth
 
 // Define Prometheus metrics
 var (
@@ -51,6 +54,7 @@ func init() {
 	prometheus.MustRegister(httpRequestDuration)
 
 	// Configure zerolog
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = zerolog.New(os.Stdout).
 		With().
 		Timestamp().
@@ -97,6 +101,14 @@ func main() {
 		log.Warn().Msg("No .env file found, using environment variables")
 	}
 
+	// Initialize JWT auth with secret from environment variable
+	jwtSecret := getEnvOrDefault("JWT_SECRET", "")
+	if jwtSecret == "" {
+		log.Fatal().Msg("JWT_SECRET environment variable must be set")
+	}
+	tokenAuth = jwtauth.New("HS256", []byte(jwtSecret), nil)
+	log.Debug().Msg("JWT authentication initialized")
+
 	// Get database connection details from environment or use defaults
 	dbUser := getEnvOrDefault("POSTGRES_USER", "postgres")
 	dbPassword := getEnvOrDefault("POSTGRES_PASSWORD", "postgres")
@@ -138,7 +150,7 @@ func main() {
 
 	// Initialize handlers
 	recordHandler := handlers.NewRecordHandler(db)
-	userHandler := handlers.NewUserHandler(db)
+	userHandler := handlers.NewUserHandler(db, tokenAuth)
 	artistHandler := handlers.NewArtistHandler(db)
 	genreHandler := handlers.NewGenreHandler(db)
 	labelHandler := handlers.NewLabelHandler(db)
@@ -146,10 +158,13 @@ func main() {
 	// Initialize router with Chi
 	r := chi.NewRouter()
 
-	// Middleware
+	// Custom zerolog middleware
+	r.Use(zerologMiddleware)
+
+	// Standard Chi middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(middleware.Heartbeat("/health"))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -163,9 +178,22 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	workDir, _ := os.Getwd()
+	staticDir := http.Dir(filepath.Join(workDir, "static"))
+	fileServer := http.FileServer(staticDir)
+
+	// Serve static files
+	r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
+		rctx := chi.RouteContext(r.Context())
+		pathPrefix := strings.TrimSuffix(rctx.RoutePattern(), "/*")
+		fs := http.StripPrefix(pathPrefix, fileServer)
+		fs.ServeHTTP(w, r)
+	})
+
 	// Public routes
 	r.Group(func(r chi.Router) {
 		r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
+			log.Info().Str("path", "/api/health").Msg("Health check endpoint accessed")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK"))
 		})
@@ -173,12 +201,36 @@ func main() {
 		// Authentication routes
 		r.Post("/api/auth/login", userHandler.Login)
 		r.Post("/api/auth/register", userHandler.Register)
+
+		// Serve the login page
+		r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
+			log.Debug().Str("path", "/login").Msg("Login page requested")
+			http.ServeFile(w, r, filepath.Join(workDir, "static", "login.html"))
+		})
+
+		// Create a registration page handler (you'll need to create this HTML file)
+		r.Get("/register", func(w http.ResponseWriter, r *http.Request) {
+			log.Debug().Str("path", "/register").Msg("Registration page requested")
+			http.ServeFile(w, r, filepath.Join(workDir, "static", "register.html"))
+		})
+
+		// Serve index page as default
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			log.Debug().Str("path", "/").Msg("Index page requested")
+			http.ServeFile(w, r, filepath.Join(workDir, "static", "index.html"))
+		})
 	})
 
 	// Protected routes (require authentication)
 	r.Group(func(r chi.Router) {
-		// Apply authentication middleware
-		r.Use(auth.Middleware)
+		// Apply JWT authentication middleware
+		r.Use(jwtauth.Verify(tokenAuth, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie))
+		r.Use(jwtAuthenticator)
+
+		// Serve the dashboard page (protected)
+		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, filepath.Join(workDir, "static", "dashboard.html"))
+		})
 
 		// Record routes
 		r.Route("/api/records", func(r chi.Router) {
@@ -234,17 +286,111 @@ func main() {
 		})
 	})
 
-	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
 	// Expose Prometheus metrics
 	r.Handle("/metrics", promhttp.Handler())
 
 	// Start server
-	log.Info().Msg("Starting server on :"+port)
+	port := getEnvOrDefault("PORT", "8080")
+	log.Info().Str("port", port).Msg("Starting server")
 	http.ListenAndServe(":"+port, r)
+}
+
+// Custom zerolog middleware
+func zerologMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Create a request ID for tracking
+		requestID := middleware.GetReqID(r.Context())
+
+		// Add this request to the context
+		logger := log.With().
+			Str("request_id", requestID).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Str("remote_ip", r.RemoteAddr).
+			Str("user_agent", r.UserAgent()).
+			Logger()
+
+		// Call the next handler
+		next.ServeHTTP(w, r)
+
+		// Log request completion
+		logger.Info().
+			Int("status_code", 200). // You might need to use a custom ResponseWriter to capture the real status code
+			Dur("duration_ms", time.Since(start)).
+			Msg("Request completed")
+	})
+}
+
+// Custom JWT authenticator middleware with zerolog
+func jwtAuthenticator(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token, claims, err := jwtauth.FromContext(r.Context())
+
+        requestID := middleware.GetReqID(r.Context())
+        logger := log.With().
+            Str("request_id", requestID).
+            Str("path", r.URL.Path).
+            Logger()
+
+        if err != nil {
+            logger.Warn().
+                Err(err).
+                Msg("JWT authentication error")
+
+            // For API requests, return 401
+            if strings.Contains(r.Header.Get("Accept"), "application/json") || 
+               strings.HasPrefix(r.URL.Path, "/api/") {
+                http.Error(w, "JWT authentication error: "+err.Error(), http.StatusUnauthorized)
+                return
+            }
+            
+            // For browser requests to protected pages, redirect to login
+            http.Redirect(w, r, "/login", http.StatusSeeOther)
+            return
+        }
+
+        if token == nil {
+            logger.Warn().
+                Msg("Invalid or missing JWT token")
+
+            // For API requests, return 401
+            if strings.Contains(r.Header.Get("Accept"), "application/json") || 
+               strings.HasPrefix(r.URL.Path, "/api/") {
+                http.Error(w, "Invalid or missing JWT token", http.StatusUnauthorized)
+                return
+            }
+            
+            // For browser requests to protected pages, redirect to login
+            http.Redirect(w, r, "/login", http.StatusSeeOther)
+            return
+        }
+
+        // Check if the token contains the user ID
+        userIDClaim, ok := claims["user_id"]
+        if !ok {
+            logger.Warn().
+                Msg("JWT token missing required user_id claim")
+
+            http.Error(w, "JWT token missing required user_id claim", http.StatusUnauthorized)
+            return
+        }
+
+        // Convert userID to string to avoid type conversion issues
+        userID := fmt.Sprintf("%v", userIDClaim)
+
+        // Log successful authentication
+        logger.Debug().
+            Str("user_id", userID).
+            Msg("JWT authentication successful")
+
+        // Add user ID to the request context for handlers to use
+        ctx := context.WithValue(r.Context(), "userID", userID)
+
+        // Token is authenticated, pass it through
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
 }
 
 // Helper function to get environment variable or return default value
