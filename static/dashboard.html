@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <title>Vinyl Collection Dashboard</title>
     <style>
         * {
@@ -316,6 +318,10 @@
         }
 
         .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
             text-align: center;
             padding: 3rem;
             background-color: white;
@@ -372,7 +378,7 @@
     <div class="container">
         <div class="dashboard-header">
             <h1>Your Vinyl Collection</h1>
-            <button class="add-record-btn" id="add-record-btn">
+            <button class="btn btn-primary" id="add-record-btn">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M8 3.33334V12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
                     <path d="M3.33337 8H12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -469,26 +475,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // Check if token is in URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
-
-            if (token) {
-                // Store token in localStorage
-                localStorage.setItem('jwtToken', token);
-
-                // Remove token from URL (for security)
-                const cleanUrl = window.location.pathname;
-                history.replaceState({}, document.title, cleanUrl);
-            } else {
-                // Check if token exists in localStorage
-                const storedToken = localStorage.getItem('jwtToken');
-                if (!storedToken) {
-                    // No token found, redirect to login
-                    window.location.href = '/login';
-                }
-            }
-
             // Set up event listeners
             const addRecordBtn = document.getElementById('add-record-btn');
             const closeModalBtn = document.getElementById('close-modal');
@@ -524,7 +510,7 @@
 
             // Event: Logout
             logoutBtn.addEventListener('click', function () {
-                localStorage.removeItem('authToken');
+                localStorage.removeItem('jwtToken');
                 window.location.href = '/login';
             });
 
@@ -551,11 +537,7 @@
 
             // Function: Fetch user profile
             function fetchUserProfile() {
-                fetch('/api/users/me', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                })
+                fetch('/api/users/me')
                     .then(response => {
                         if (!response.ok) {
                             throw new Error('Failed to fetch user profile');
@@ -574,11 +556,7 @@
             function fetchRecords() {
                 const recordsContainer = document.getElementById('records-container');
 
-                fetch('/api/records', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                })
+                fetch('/api/records')
                     .then(response => {
                         if (!response.ok) {
                             throw new Error('Failed to fetch records');
@@ -589,7 +567,7 @@
                         // Remove loading indicator
                         recordsContainer.innerHTML = '';
 
-                        if (data.length === 0) {
+                        if (data === null || data.length === 0) {
                             showEmptyState();
                             return;
                         }
@@ -681,8 +659,7 @@
                             <circle cx="12" cy="12" r="1" fill="#888"/>
                         </svg>
                         <h2>Your collection is empty</h2>
-                        <p>Add your first vinyl record to get started</p>
-                        <button class="add-record-btn" onclick="document.getElementById('add-record-btn').click()">
+                        <button class="btn btn-primary" onclick="document.getElementById('add-record-btn').click()">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M8 3.33334V12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                                 <path d="M3.33337 8H12.6667" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -771,7 +748,6 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(recordData)
                 })

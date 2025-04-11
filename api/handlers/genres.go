@@ -36,7 +36,12 @@ func (h *GenreHandler) GetGenre(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Getting genre")
 
@@ -65,8 +70,13 @@ func (h *GenreHandler) GetGenre(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GenreHandler) ListGenres(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 	log.Debug().Int("userID", userID).Msg("Listing genres for user")
 
@@ -82,8 +92,13 @@ func (h *GenreHandler) ListGenres(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *GenreHandler) CreateGenre(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 	var genre models.Genre
 	if err := json.NewDecoder(r.Body).Decode(&genre); err != nil {
@@ -118,8 +133,13 @@ func (h *GenreHandler) UpdateGenre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Updating genre")
 
@@ -176,8 +196,13 @@ func (h *GenreHandler) DeleteGenre(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Deleting genre")
 

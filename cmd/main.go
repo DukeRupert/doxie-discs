@@ -25,6 +25,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/dukerupert/doxie-discs/api/handlers"
+	"github.com/dukerupert/doxie-discs/db/models"
+	"github.com/dukerupert/doxie-discs/middleware/auth"
 )
 var tokenAuth *jwtauth.JWTAuth
 
@@ -148,9 +150,12 @@ func main() {
 	log.Info().Msg("Migrations completed successfully")
 	defer db.Close()
 
+	// Initialize services
+	sessionService := models.NewSessionService(db)
+
 	// Initialize handlers
 	recordHandler := handlers.NewRecordHandler(db)
-	userHandler := handlers.NewUserHandler(db, tokenAuth)
+	userHandler := handlers.NewUserHandler(db, sessionService)
 	artistHandler := handlers.NewArtistHandler(db)
 	genreHandler := handlers.NewGenreHandler(db)
 	labelHandler := handlers.NewLabelHandler(db)
@@ -224,8 +229,7 @@ func main() {
 	// Protected routes (require authentication)
 	r.Group(func(r chi.Router) {
 		// Apply JWT authentication middleware
-		r.Use(jwtauth.Verify(tokenAuth, jwtauth.TokenFromHeader, jwtauth.TokenFromCookie))
-		r.Use(jwtAuthenticator)
+		r.Use(auth.SessionAuthMiddleware(sessionService))
 
 		// Serve the dashboard page (protected)
 		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {

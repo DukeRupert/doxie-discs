@@ -6,15 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
 	"time"
 	"strings"
-	"strconv"
-
-	"github.com/go-chi/jwtauth/v5"
+	
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/dukerupert/doxie-discs/db/models"
-	"github.com/dukerupert/doxie-discs/middleware/auth"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/rs/zerolog/log"
 
@@ -23,7 +19,7 @@ import (
 type UserHandler struct {
 	DB         *sql.DB
 	UserService *models.UserService
-	TokenAuth   *jwtauth.JWTAuth
+	SessionService *models.SessionService
 }
 
 type LoginRequest struct {
@@ -53,15 +49,15 @@ type AuthResponse struct {
 }
 
 // NewUserHandler creates a new UserHandler with the given DB connection
-func NewUserHandler(db *sql.DB, tokenAuth *jwtauth.JWTAuth) *UserHandler {
+func NewUserHandler(db *sql.DB, sessionService *models.SessionService) *UserHandler {
 	return &UserHandler{
 		DB:         db,
 		UserService: models.NewUserService(db),
-		TokenAuth:   tokenAuth,
+		SessionService: sessionService,
 	}
 }
 
-// Register creates a new user account
+// Register creates a new user account and starts a session
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -106,25 +102,59 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT token
-	token, err := auth.GenerateToken(createdUser.ID)
+	// Get IP address and user agent for the session
+	ipAddress := r.RemoteAddr
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		ipAddress = forwardedFor
+	}
+	userAgent := r.Header.Get("User-Agent")
+	
+	// Create session data
+	sessionData := map[string]interface{}{
+		"user_email": createdUser.Email,
+		"user_name":  createdUser.Name,
+	}
+	
+	// Create a new session
+	session, err := h.SessionService.Create(
+		createdUser.ID,
+		sessionData,
+		ipAddress,
+		userAgent,
+		24*time.Hour, // Session duration
+	)
+	
 	if err != nil {
-		http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
+		http.Error(w, "Error creating session", http.StatusInternalServerError)
 		return
 	}
 
-	// Return user and token
+	// Set the session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_token",
+		Value:    session.Token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil, // Set to true in production with HTTPS
+		MaxAge:   int(24 * time.Hour.Seconds()),
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	// Return user info (without token in response body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  *createdUser,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"user": map[string]interface{}{
+			"id":    createdUser.ID,
+			"email": createdUser.Email,
+			"name":  createdUser.Name,
+		},
 	})
 }
 
-// Login authenticates a user and returns a JWT token
+// Login authenticates a user and creates a session
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	// Create a logger with request context
 	// Create a logger with request context
     logger := log.With().
         Str("request_id", middleware.GetReqID(r.Context())).
@@ -178,32 +208,46 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT token using go-chi/jwtauth
-    claims := map[string]interface{}{
-        "user_id": user.ID,
-        "email":   user.Email,
-        "exp":     time.Now().Add(24 * time.Hour).Unix(),
+    // Get IP address and user agent
+    ipAddress := r.RemoteAddr
+    if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+        ipAddress = forwardedFor
+    }
+    userAgent := r.Header.Get("User-Agent")
+    
+    // Create session data
+    sessionData := map[string]interface{}{
+        "user_email": user.Email,
+        "user_name": user.Name,
     }
     
-    _, tokenString, err := h.TokenAuth.Encode(claims)
+    // Create session using the service
+    session, err := h.SessionService.Create(
+        user.ID,
+        sessionData,
+        ipAddress,
+        userAgent,
+        24*time.Hour, // Session duration
+    )
+    
     if err != nil {
         logger.Error().
             Err(err).
             Int("user_id", user.ID).
-            Msg("Failed to generate JWT token")
-        http.Error(w, "Error generating authentication token", http.StatusInternalServerError)
+            Msg("Failed to create session")
+        http.Error(w, "Error creating session", http.StatusInternalServerError)
         return
     }
 
-    // Set the JWT token as a cookie
+    // Set the session token as a cookie
     http.SetCookie(w, &http.Cookie{
-        Name:     "jwt",
-        Value:    tokenString,
+        Name:     "session_token",
+        Value:    session.Token,
         Path:     "/",
         HttpOnly: true,
         Secure:   r.TLS != nil, // Set to true if using HTTPS
         MaxAge:   int(24 * time.Hour.Seconds()),
-        SameSite: http.SameSiteLaxMode,
+        SameSite: http.SameSiteStrictMode,
     })
 
     logger.Info().
@@ -213,44 +257,31 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 
     // Check if this is an API request or a form submission
     if strings.Contains(r.Header.Get("Accept"), "application/json") {
-		// For API clients, return JSON response with token
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(AuthResponse{
-			Token: tokenString,
-			User:  *user,
-		})
-	} else {
-		// For browser clients, set the token in a cookie and redirect
-		http.SetCookie(w, &http.Cookie{
-			Name:     "jwt",
-			Value:    tokenString,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   r.TLS != nil, // Set to true if using HTTPS
-			MaxAge:   int(24 * time.Hour.Seconds()),
-			SameSite: http.SameSiteLaxMode,
-		})
-		
-		// Redirect to dashboard with token in URL (will be removed by JS)
-		http.Redirect(w, r, "/dashboard?token="+url.QueryEscape(tokenString), http.StatusSeeOther)
-	}
+        // For API clients, return JSON response with user info
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "success": true,
+            "user": map[string]interface{}{
+                "id": user.ID,
+                "email": user.Email,
+                "name": user.Name,
+            },
+        })
+    } else {
+        // For browser clients, redirect to dashboard
+        http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+    }
 }
 
 // GetProfile returns the current user's profile
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	 // Get user ID from context as a string
-	 userIDStr, ok := r.Context().Value("userID").(string)
-	 if !ok {
-		 http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		 return
-	 }
- 
-	 // Convert to integer if needed
-	 userID, err := strconv.Atoi(userIDStr)
-	 if err != nil {
-		 http.Error(w, "Invalid user ID", http.StatusInternalServerError)
-		 return
-	 }
+	// Get user ID from context (set by auth middleware)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Get user from database
 	user, err := h.UserService.GetByID(userID)

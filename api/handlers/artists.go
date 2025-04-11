@@ -37,7 +37,12 @@ func (h *ArtistHandler) GetArtist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Getting artist")
 
@@ -67,7 +72,12 @@ func (h *ArtistHandler) GetArtist(w http.ResponseWriter, r *http.Request) {
 
 func (h *ArtistHandler) ListArtists(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("userID", userID).Msg("Listing artists for user")
 
@@ -86,7 +96,12 @@ func (h *ArtistHandler) ListArtists(w http.ResponseWriter, r *http.Request) {
 // CreateArtist adds a new artist to the database
 func (h *ArtistHandler) CreateArtist(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var artist models.Artist
 	if err := json.NewDecoder(r.Body).Decode(&artist); err != nil {
@@ -119,7 +134,12 @@ func (h *ArtistHandler) UpdateArtist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Updating artist")
 
@@ -177,7 +197,12 @@ func (h *ArtistHandler) DeleteArtist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Deleting artist")
 

@@ -36,8 +36,13 @@ func (h *LabelHandler) GetLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 	
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Getting label")
 
@@ -67,8 +72,13 @@ func (h *LabelHandler) GetLabel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LabelHandler) ListLabels(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 	
 	log.Debug().Int("userID", userID).Msg("Listing labels for user")
 
@@ -86,8 +96,13 @@ func (h *LabelHandler) ListLabels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LabelHandler) CreateLabel(w http.ResponseWriter, r *http.Request) {
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 
 	var label models.Label
 	if err := json.NewDecoder(r.Body).Decode(&label); err != nil {
@@ -122,8 +137,13 @@ func (h *LabelHandler) UpdateLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 	
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Updating label")
 
@@ -179,8 +199,13 @@ func (h *LabelHandler) DeleteLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+		// Get user ID from context (set by auth middleware)
+		userID, err := GetUserIDFromContext(r)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to retrieve userID from context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
 	
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Deleting label")
 

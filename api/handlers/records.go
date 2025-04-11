@@ -33,7 +33,12 @@ func (h *RecordHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Getting record")
 
@@ -63,18 +68,10 @@ func (h *RecordHandler) GetRecord(w http.ResponseWriter, r *http.Request) {
 
 // ListRecords gets all records for the user
 func (h *RecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
-
-	// Get user ID from context as a string
-	userIDStr, ok := r.Context().Value("userID").(string)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Convert to integer if needed
-	userID, err := strconv.Atoi(userIDStr)
+	userID, err := GetUserIDFromContext(r)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -87,6 +84,8 @@ func (h *RecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Info().Int("count", len(records)).Msg("Records fetched")
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(records)
 	log.Debug().Int("userID", userID).Int("count", len(records)).Msg("Successfully listed records")
@@ -95,7 +94,12 @@ func (h *RecordHandler) ListRecords(w http.ResponseWriter, r *http.Request) {
 // CreateRecord adds a new record to the database
 func (h *RecordHandler) CreateRecord(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var record models.Record
 	if err := json.NewDecoder(r.Body).Decode(&record); err != nil {
@@ -132,7 +136,12 @@ func (h *RecordHandler) UpdateRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Updating record")
 
@@ -189,7 +198,12 @@ func (h *RecordHandler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	log.Debug().Int("id", id).Int("userID", userID).Msg("Deleting record")
 
@@ -225,7 +239,12 @@ func (h *RecordHandler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 // SearchRecords searches for records based on query parameters
 func (h *RecordHandler) SearchRecords(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context (set by auth middleware)
-	userID := r.Context().Value("userID").(int)
+	userID, err := GetUserIDFromContext(r)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve userID from context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	// Get search parameters from query string
 	query := r.URL.Query().Get("q")
